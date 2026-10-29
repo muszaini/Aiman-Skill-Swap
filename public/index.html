@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SkillSwap — AI-Powered Peer-to-Peer Reciprocal Learning</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Sticky Top Navigation -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a href="#discover" class="brand" id="brandLink">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
+            <rect width="28" height="28" rx="8" fill="#0F766E"/>
+            <path d="M7.5 11H19.5L16 7.5M20.5 17H8.5L12 20.5" stroke="#FBF9F5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div class="brand-text">
+          <span class="brand-name">SkillSwap</span>
+          <span class="brand-tag">Reciprocal Learning Atelier</span>
+        </div>
+      </a>
+
+      <nav class="main-nav" aria-label="Primary Navigation">
+        <button class="nav-tab active" data-tab="discover" id="navDiscover">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <span>Discover &amp; AI Match</span>
+        </button>
+        <button class="nav-tab" data-tab="requests" id="navRequests">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2.1l4 4-4 4"/><path d="M3 12.2v-2a4 4 0 0 1 4-4h12.8M7 21.9l-4-4 4-4"/><path d="M21 11.8v2a4 4 0 0 1-4 4H4.2"/></svg>
+          <span>Swap Requests</span>
+          <span class="nav-badge" id="requestsBadge">0</span>
+        </button>
+        <button class="nav-tab" data-tab="exchanges" id="navExchanges">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
+          <span>Completed Exchanges</span>
+          <span class="nav-badge subtle" id="exchangesBadge">0</span>
+        </button>
+        <button class="nav-tab" data-tab="profile" id="navProfile">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>My Skill Profile</span>
+        </button>
+      </nav>
+
+      <div class="topbar-actions">
+        <div class="persona-switcher" title="Switch active member perspective to test reciprocal swaps">
+          <span class="persona-label">Viewing as:</span>
+          <select id="viewerSelect" aria-label="Switch active member profile"></select>
+        </div>
+        <button class="btn btn-outline-sm" id="openNewProfileModalBtn" title="Create a new skill profile">
+          + New Profile
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="workspace-container">
+    <!-- Left Sticky Sidebar: Active User's Reciprocal Passport -->
+    <aside class="passport-sidebar" id="passportSidebar">
+      <div class="passport-card">
+        <div class="passport-header">
+          <div class="avatar-lg" id="sidebarAvatar">ML</div>
+          <div class="passport-identity">
+            <div class="passport-eyebrow">ACTIVE SKILL PASSPORT</div>
+            <h2 id="sidebarName">Maya Lin</h2>
+            <p class="passport-role" id="sidebarRole">Senior Financial Analyst</p>
+            <div class="passport-meta">
+              <span id="sidebarLocation">San Francisco</span>
+              <span>•</span>
+              <span class="mono-stat" id="sidebarRating">★ 4.95</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="passport-stats-grid">
+          <div class="passport-stat-box">
+            <span class="stat-val mono-stat" id="sidebarSwapsCount">6</span>
+            <span class="stat-lbl">Completed Swaps</span>
+          </div>
+          <div class="passport-stat-box">
+            <span class="stat-val mono-stat" id="sidebarHoursCount">7.5h</span>
+            <span class="stat-lbl">Tuition-Free Hours</span>
+          </div>
+        </div>
+
+        <div class="passport-section">
+          <div class="passport-section-head">
+            <span class="pill-indicator offer-dot"></span>
+            <h3>Skills I Teach (Offering)</h3>
+            <button class="link-btn" data-goto-profile="offer">+ Add</button>
+          </div>
+          <div class="passport-skills-list" id="sidebarOffersList"></div>
+        </div>
+
+        <div class="passport-section">
+          <div class="passport-section-head">
+            <span class="pill-indicator want-dot"></span>
+            <h3>Skills I Want to Learn</h3>
+            <button class="link-btn" data-goto-profile="want">+ Add</button>
+          </div>
+          <div class="passport-skills-list" id="sidebarWantsList"></div>
+        </div>
+
+        <div class="passport-section compact">
+          <div class="passport-section-head">
+            <h3>Preferred Windows</h3>
+          </div>
+          <div class="availability-chips" id="sidebarAvailability"></div>
+        </div>
+
+        <div class="passport-footer">
+          <button class="btn btn-secondary full-width" id="editProfileSidebarBtn">
+            Customize Skill Profile
+          </button>
+        </div>
+      </div>
+
+      <!-- Community Pulse Card -->
+      <div class="community-pulse-card">
+        <div class="pulse-eyebrow">TUITION-FREE LEARNING LEDGER</div>
+        <p class="pulse-copy">
+          Every session on SkillSwap is a <strong>50/50 reciprocal exchange</strong>—teach what comes naturally to you, learn what you need next.
+        </p>
+        <div class="pulse-metrics">
+          <div>
+            <strong class="mono-stat" id="pulseMembersCount">6</strong>
+            <span>Active Peers</span>
+          </div>
+          <div>
+            <strong class="mono-stat" id="pulseMatchesCount">5</strong>
+            <span>90%+ AI Matches</span>
+          </div>
+          <div>
+            <strong class="mono-stat" id="pulseHoursSaved">56h</strong>
+            <span>Hours Exchanged</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Views -->
+    <section class="main-stage">
+
+      <!-- VIEW 1: DISCOVER & AI MATCH -->
+      <div class="view-panel active" id="view-discover">
+        <!-- Editorial Hero + AI Matchmaking Concierge -->
+        <div class="concierge-hero">
+          <div class="concierge-top">
+            <div>
+              <span class="eyebrow-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                AI RECIPROCAL MATCHMAKING CONCIERGE
+              </span>
+              <h1 class="display-title">Trade skills directly with compatible peers.</h1>
+              <p class="hero-subtitle">
+                Describe what you can teach and what you want to learn in plain language. Our AI maps semantic skill graphs, proficiency deltas, and schedule overlap to build your 50/50 session blueprint.
+              </p>
+            </div>
+          </div>
+
+          <!-- Natural Language AI Search Bar -->
+          <form class="ai-search-box" id="aiConciergeForm">
+            <div class="ai-input-wrapper">
+              <span class="ai-sparkle-icon" aria-hidden="true">✦</span>
+              <input
+                type="text"
+                id="aiPromptInput"
+                placeholder="e.g., I can teach Excel pivot tables and want to learn graphic design in return..."
+                autocomplete="off"
+              />
+              <button type="button" class="clear-search-btn hidden" id="clearAiSearchBtn" title="Reset search">✕</button>
+            </div>
+            <button type="submit" class="btn btn-primary" id="runAiMatchBtn">
+              <span>Ask AI Matchmaker</span>
+            </button>
+          </form>
+
+          <!-- Quick Scenario Chips from Prompt -->
+          <div class="preset-prompts-row">
+            <span class="preset-label">Try scenarios:</span>
+            <button type="button" class="preset-chip" data-prompt="I can teach Excel and want to learn graphic design in return">
+              Teach Excel ⇄ Learn Graphic Design
+            </button>
+            <button type="button" class="preset-chip" data-prompt="Offer conversational English practice in exchange for beginner Python lessons">
+              Offer Conversational English ⇄ Beginner Python
+            </button>
+            <button type="button" class="preset-chip" data-prompt="Teach Excel financial modeling and cohort sheets in exchange for Figma UI design">
+              Excel Cohort Modeling ⇄ Figma UI Design
+            </button>
+            <button type="button" class="preset-chip" data-prompt="">
+              Show All Compatible Peers
+            </button>
+          </div>
+
+          <!-- Dynamic AI Intent Analysis Banner (Shown when AI query runs) -->
+          <div class="ai-intent-banner hidden" id="aiIntentBanner">
+            <div class="ai-intent-content">
+              <div class="ai-intent-title">
+                <span class="ai-badge-pill">AI SEMANTIC ANALYSIS</span>
+                <span id="aiIntentSummaryText"></span>
+              </div>
+              <div class="ai-extracted-pills" id="aiExtractedPills"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Category Filter Bar & Sort Info -->
+        <div class="discovery-toolbar">
+          <div class="category-pills" id="categoryFilterBar" role="tablist" aria-label="Skill category filter">
+            <button class="cat-pill active" data-category="all">All Skill Domains</button>
+            <button class="cat-pill" data-category="Design & Creative">Design &amp; Creative</button>
+            <button class="cat-pill" data-category="Data & Spreadsheets">Data &amp; Spreadsheets</button>
+            <button class="cat-pill" data-category="Programming & Tech">Programming &amp; Tech</button>
+            <button class="cat-pill" data-category="Languages & Communication">Languages &amp; Communication</button>
+            <button class="cat-pill" data-category="Product & Business">Product &amp; Business</button>
+          </div>
+          <div class="results-counter">
+            <span id="candidateCountText">Showing 5 compatible peers ranked by reciprocal AI synergy</span>
+          </div>
+        </div>
+
+        <!-- Compatible Peers Match Grid -->
+        <div class="matches-grid" id="matchesGrid"></div>
+      </div>
+
+      <!-- VIEW 2: SWAP REQUESTS -->
+      <div class="view-panel" id="view-requests">
+        <div class="section-header-bar">
+          <div>
+            <span class="eyebrow-badge">SESSION COORDINATION HUB</span>
+            <h1 class="section-title">Manage Skill-Exchange Requests</h1>
+            <p class="section-subtitle">
+              Review incoming swap proposals, manage your outgoing invitations, inspect AI-generated 50/50 session agendas, and log completed sessions.
+            </p>
+          </div>
+        </div>
+
+        <div class="requests-filter-tabs" id="requestsFilterTabs">
+          <button class="req-filter-btn active" data-req-filter="all">All Requests (<span id="countAllReq">0</span>)</button>
+          <button class="req-filter-btn" data-req-filter="incoming">Incoming (<span id="countIncomingReq">0</span>)</button>
+          <button class="req-filter-btn" data-req-filter="outgoing">Outgoing (<span id="countOutgoingReq">0</span>)</button>
+          <button class="req-filter-btn" data-req-filter="accepted">Accepted &amp; Scheduled (<span id="countAcceptedReq">0</span>)</button>
+        </div>
+
+        <div class="requests-list" id="requestsListContainer"></div>
+      </div>
+
+      <!-- VIEW 3: COMPLETED EXCHANGES -->
+      <div class="view-panel" id="view-exchanges">
+        <div class="section-header-bar split">
+          <div>
+            <span class="eyebrow-badge">VERIFIED PEER LEARNING PORTFOLIO</span>
+            <h1 class="section-title">Completed Skill Exchanges</h1>
+            <p class="section-subtitle">
+              A permanent ledger of reciprocal sessions, skills taught and learned, takeaways, and peer endorsements.
+            </p>
+          </div>
+          <button class="btn btn-primary" id="openRecordExchangeBtn">
+            + Record Completed Exchange
+          </button>
+        </div>
+
+        <div class="exchanges-summary-strip" id="exchangesSummaryStrip"></div>
+
+        <div class="exchanges-ledger-list" id="exchangesLedgerContainer"></div>
+      </div>
+
+      <!-- VIEW 4: MY SKILL PROFILE -->
+      <div class="view-panel" id="view-profile">
+        <div class="section-header-bar split">
+          <div>
+            <span class="eyebrow-badge">SKILL PASSPORT STUDIO</span>
+            <h1 class="section-title">Manage Your Skill Profile</h1>
+            <p class="section-subtitle">
+              Update what you can teach and what you want to learn. Our AI recalculates your compatibility scores across the community in real time.
+            </p>
+          </div>
+          <button class="btn btn-outline" id="createNewProfileFromStudioBtn">
+            + Create Another Member Profile
+          </button>
+        </div>
+
+        <div class="profile-studio-grid">
+          <!-- Profile Identity Form -->
+          <form class="studio-card" id="profileDetailsForm">
+            <h3 class="studio-card-title">1. Personal Identity &amp; Session Format</h3>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="profName">Full Name</label>
+                <input type="text" id="profName" required />
+              </div>
+              <div class="form-group">
+                <label for="profRole">Headline / Role</label>
+                <input type="text" id="profRole" required placeholder="e.g., Financial Analyst & Aspiring Designer" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="profBio">Learning &amp; Teaching Bio</label>
+              <textarea id="profBio" rows="3" required></textarea>
+            </div>
+            <div class="form-row-3">
+              <div class="form-group">
+                <label for="profLocation">Location</label>
+                <input type="text" id="profLocation" />
+              </div>
+              <div class="form-group">
+                <label for="profTimezone">Timezone</label>
+                <input type="text" id="profTimezone" />
+              </div>
+              <div class="form-group">
+                <label for="profDuration">Default Session Length</label>
+                <select id="profDuration">
+                  <option value="45">45 Minutes (22m / 22m)</option>
+                  <option value="60">60 Minutes (30m / 30m)</option>
+                  <option value="90">90 Minutes (45m / 45m)</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Available Time Windows</label>
+              <div class="checkbox-chips" id="profAvailabilityCheckboxes">
+                <label class="check-chip"><input type="checkbox" value="Weekday Mornings" /><span>Weekday Mornings</span></label>
+                <label class="check-chip"><input type="checkbox" value="Weekday Evenings" /><span>Weekday Evenings</span></label>
+                <label class="check-chip"><input type="checkbox" value="Saturday Mornings" /><span>Saturday Mornings</span></label>
+                <label class="check-chip"><input type="checkbox" value="Sunday Afternoons" /><span>Sunday Afternoons</span></label>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Save Profile Details &amp; Recalculate AI Matches</button>
+            </div>
+          </form>
+
+          <!-- Skills I Teach & Skills I Want to Learn Manager -->
+          <div class="studio-skills-column">
+            <!-- Offering Card -->
+            <div class="studio-card offer-accent-border">
+              <div class="studio-card-head">
+                <div>
+                  <span class="badge-offer">TEACHING / OFFERING</span>
+                  <h3 class="studio-card-title">Skills You Can Teach Others</h3>
+                </div>
+              </div>
+              <div class="studio-skill-items" id="studioOffersList"></div>
+
+              <form class="add-skill-inline-form" id="addOfferSkillForm">
+                <h4>Add a Skill You Can Teach</h4>
+                <div class="form-row-3">
+                  <input type="text" id="newOfferName" placeholder="e.g., Excel Pivot Tables, Conversational English" required />
+                  <select id="newOfferCategory">
+                    <option value="Data & Spreadsheets">Data &amp; Spreadsheets</option>
+                    <option value="Languages & Communication">Languages &amp; Communication</option>
+                    <option value="Design & Creative">Design &amp; Creative</option>
+                    <option value="Programming & Tech">Programming &amp; Tech</option>
+                    <option value="Product & Business">Product &amp; Business</option>
+                  </select>
+                  <select id="newOfferLevel">
+                    <option value="Expert">Expert</option>
+                    <option value="Advanced" selected>Advanced</option>
+                    <option value="Intermediate">Intermediate</option>
+                  </select>
+                </div>
+                <div class="form-row-action">
+                  <input type="text" id="newOfferDesc" placeholder="Specific topics you can coach (e.g., XLOOKUP, dashboards, interview prep)..." />
+                  <button type="submit" class="btn btn-offer">+ Add Offered Skill</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Seeking Card -->
+            <div class="studio-card want-accent-border">
+              <div class="studio-card-head">
+                <div>
+                  <span class="badge-want">LEARNING / SEEKING</span>
+                  <h3 class="studio-card-title">Skills You Want to Learn</h3>
+                </div>
+              </div>
+              <div class="studio-skill-items" id="studioWantsList"></div>
+
+              <form class="add-skill-inline-form" id="addWantSkillForm">
+                <h4>Add a Skill You Want to Learn</h4>
+                <div class="form-row-3">
+                  <input type="text" id="newWantName" placeholder="e.g., Graphic Design, Beginner Python Lessons" required />
+                  <select id="newWantCategory">
+                    <option value="Design & Creative">Design &amp; Creative</option>
+                    <option value="Programming & Tech">Programming &amp; Tech</option>
+                    <option value="Data & Spreadsheets">Data &amp; Spreadsheets</option>
+                    <option value="Languages & Communication">Languages &amp; Communication</option>
+                    <option value="Product & Business">Product &amp; Business</option>
+                  </select>
+                  <select id="newWantLevel">
+                    <option value="Beginner" selected>Beginner Goal</option>
+                    <option value="Intermediate">Intermediate Goal</option>
+                    <option value="Advanced">Advanced Goal</option>
+                  </select>
+                </div>
+                <div class="form-row-action">
+                  <input type="text" id="newWantDesc" placeholder="What outcome do you want help with? (e.g., Figma layouts, automating CSVs in Python)" />
+                  <button type="submit" class="btn btn-want">+ Add Learning Goal</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- MODAL 1: REQUEST SKILL-EXCHANGE SESSION (WITH AI CO-PILOT AGENDA) -->
+  <div class="modal-backdrop hidden" id="requestModalBackdrop" role="dialog" aria-modal="true" aria-labelledby="requestModalTitle">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div>
+          <span class="eyebrow-badge" id="modalMatchScoreBadge">98% AI RECIPROCAL MATCH</span>
+          <h2 id="requestModalTitle">Request a 50/50 Skill-Exchange Session</h2>
+        </div>
+        <button class="modal-close-btn" id="closeRequestModalBtn" aria-label="Close modal">✕</button>
+      </div>
+
+      <form id="createSwapRequestForm" class="modal-body">
+        <input type="hidden" id="reqRecipientId" />
+
+        <!-- Reciprocal Bridge Preview inside Modal -->
+        <div class="modal-swap-bridge">
+          <div class="bridge-side offer-side">
+            <span class="bridge-label">YOU TEACH (FIRST HALF)</span>
+            <select id="reqOfferedSkillSelect" required></select>
+          </div>
+          <div class="bridge-center-icon" aria-hidden="true">⇄</div>
+          <div class="bridge-side want-side">
+            <span class="bridge-label" id="modalPartnerTeachesLabel">PARTNER TEACHES (SECOND HALF)</span>
+            <select id="reqWantedSkillSelect" required></select>
+          </div>
+        </div>
+
+        <div class="form-row-3">
+          <div class="form-group">
+            <label for="reqProposedSlot">Proposed Time Window</label>
+            <input type="text" id="reqProposedSlot" required placeholder="e.g., Thursday, 6:30 PM – 7:30 PM" />
+          </div>
+          <div class="form-group">
+            <label for="reqDurationSelect">Total Session Duration</label>
+            <select id="reqDurationSelect">
+              <option value="45">45 mins (20m / 20m split)</option>
+              <option value="60" selected>60 mins (25m / 25m split)</option>
+              <option value="90">90 mins (40m / 40m split)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="reqFormatSelect">Session Format</label>
+            <select id="reqFormatSelect">
+              <option value="1-on-1 Live Video + Screen Share">1-on-1 Live Video + Screen Share</option>
+              <option value="Pair Programming + Live Conversation">Pair Programming + Live Conversation</option>
+              <option value="Live Figma / Spreadsheet Workshop">Live Figma / Spreadsheet Workshop</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="label-with-action">
+            <label for="reqLearningGoal">Specific Mutual Session Goal</label>
+            <button type="button" class="ai-regen-btn" id="regenerateAiPlanBtn">
+              ✦ Regenerate AI Session Blueprint
+            </button>
+          </div>
+          <input type="text" id="reqLearningGoal" required />
+        </div>
+
+        <!-- AI Co-Pilot 50/50 Agenda Preview -->
+        <div class="ai-agenda-box">
+          <div class="ai-agenda-head">
+            <span>✦ AI-Generated 50/50 Session Agenda (Included with Request)</span>
+          </div>
+          <div class="ai-agenda-steps" id="modalAiAgendaList"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="reqPersonalMessage">Personal Note to Partner</label>
+          <textarea id="reqPersonalMessage" rows="3" required></textarea>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" id="cancelRequestModalBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Send Skill-Exchange Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: RECORD COMPLETED EXCHANGE -->
+  <div class="modal-backdrop hidden" id="recordExchangeModalBackdrop" role="dialog" aria-modal="true" aria-labelledby="recordModalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <span class="eyebrow-badge">VERIFIED LEARNING LOG</span>
+          <h2 id="recordModalTitle">Record a Completed Skill Exchange</h2>
+        </div>
+        <button class="modal-close-btn" id="closeRecordModalBtn" aria-label="Close modal">✕</button>
+      </div>
+
+      <form id="recordExchangeForm" class="modal-body">
+        <input type="hidden" id="recRequestId" />
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="recPartnerSelect">Exchange Partner</label>
+            <select id="recPartnerSelect" required></select>
+          </div>
+          <div class="form-group">
+            <label for="recDurationInput">Duration Completed (Minutes)</label>
+            <input type="number" id="recDurationInput" value="60" min="15" max="240" required />
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="recSkillATaught">Skill You Taught</label>
+            <input type="text" id="recSkillATaught" required placeholder="e.g., Excel & Spreadsheet Modeling" />
+          </div>
+          <div class="form-group">
+            <label for="recSkillBTaught">Skill Partner Taught You</label>
+            <input type="text" id="recSkillBTaught" required placeholder="e.g., Graphic Design & Typography" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="recSummaryNotes">Session Summary</label>
+          <textarea id="recSummaryNotes" rows="2" required placeholder="What did you build, practice, or review together?"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="recTakeawaysInput">Key Takeaways &amp; Artifacts (One per line)</label>
+          <textarea id="recTakeawaysInput" rows="3" placeholder="Built automated Pivot Table summary&#10;Redesigned cover slide using 12-column grid"></textarea>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="recRatingSelect">Session Rating</label>
+            <select id="recRatingSelect">
+              <option value="5" selected>★★★★★ (5/5 — Exceptional Reciprocal Value)</option>
+              <option value="4">★★★★☆ (4/5 — Great Session)</option>
+              <option value="3">★★★☆☆ (3/5 — Helpful)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="recTestimonialInput">Endorsement / Testimonial for Partner</label>
+            <input type="text" id="recTestimonialInput" required placeholder="e.g., Clear examples and super patient coaching!" />
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" id="cancelRecordModalBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Verify &amp; Log Completed Swap</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 3: CREATE NEW MEMBER PROFILE -->
+  <div class="modal-backdrop hidden" id="newProfileModalBackdrop" role="dialog" aria-modal="true" aria-labelledby="newProfileModalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <span class="eyebrow-badge">JOIN THE SKILLSWAP COMMUNITY</span>
+          <h2 id="newProfileModalTitle">Create Your SkillSwap Profile</h2>
+        </div>
+        <button class="modal-close-btn" id="closeNewProfileModalBtn" aria-label="Close modal">✕</button>
+      </div>
+
+      <form id="createNewProfileForm" class="modal-body">
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="npName">Your Name</label>
+            <input type="text" id="npName" required placeholder="e.g., Jordan Chen" />
+          </div>
+          <div class="form-group">
+            <label for="npRole">Role / Headline</label>
+            <input type="text" id="npRole" required placeholder="e.g., Operations Lead & Language Learner" />
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="npLocation">City / Country</label>
+            <input type="text" id="npLocation" value="Seattle, USA" required />
+          </div>
+          <div class="form-group">
+            <label for="npTimezone">Timezone</label>
+            <input type="text" id="npTimezone" value="UTC-7 (PDT)" required />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="npBio">Short Bio</label>
+          <textarea id="npBio" rows="2" required placeholder="Share what you love teaching and what you're excited to learn..."></textarea>
+        </div>
+
+        <div class="modal-swap-bridge compact-bridge">
+          <div class="bridge-side offer-side">
+            <span class="bridge-label">PRIMARY SKILL YOU TEACH</span>
+            <input type="text" id="npOfferSkill" required placeholder="e.g., Excel, Conversational English" />
+            <select id="npOfferCategory">
+              <option value="Data & Spreadsheets">Data &amp; Spreadsheets</option>
+              <option value="Languages & Communication">Languages &amp; Communication</option>
+              <option value="Design & Creative">Design &amp; Creative</option>
+              <option value="Programming & Tech">Programming &amp; Tech</option>
+              <option value="Product & Business">Product &amp; Business</option>
+            </select>
+            <input type="text" id="npOfferDesc" placeholder="Specific topics (e.g., Pivot tables, idioms)" />
+          </div>
+          <div class="bridge-center-icon" aria-hidden="true">⇄</div>
+          <div class="bridge-side want-side">
+            <span class="bridge-label">PRIMARY SKILL YOU WANT TO LEARN</span>
+            <input type="text" id="npWantSkill" required placeholder="e.g., Graphic Design, Beginner Python" />
+            <select id="npWantCategory">
+              <option value="Design & Creative">Design &amp; Creative</option>
+              <option value="Programming & Tech">Programming &amp; Tech</option>
+              <option value="Data & Spreadsheets">Data &amp; Spreadsheets</option>
+              <option value="Languages & Communication">Languages &amp; Communication</option>
+              <option value="Product & Business">Product &amp; Business</option>
+            </select>
+            <input type="text" id="npWantDesc" placeholder="Learning goal (e.g., Figma posters, Python scripts)" />
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" id="cancelNewProfileModalBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Profile &amp; Find AI Matches</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

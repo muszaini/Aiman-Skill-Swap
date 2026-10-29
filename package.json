@@ -1,0 +1,15 @@
+{
+  "name": "skillswap",
+  "version": "1.0.0",
+  "description": "SkillSwap — AI-Powered Reciprocal Peer-to-Peer Learning & Skill Exchange Platform",
+  "main": "server.js",
+  "scripts": {
+    "build": "npm --prefix frontend install && npm --prefix frontend run build",
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node tests/verify-all.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
