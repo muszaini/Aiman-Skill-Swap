@@ -33,16 +33,28 @@ except ImportError:
     def Query(default=None):  # type: ignore
         return default
 
-from .ai_service import (
-    evaluate_compatibility,
-    generate_ai_chat_response,
-    generate_ai_learning_plan,
-    generate_profile_or_skill_suggestion,
-    generate_session_blueprint,
-    parse_natural_language_intent,
-)
-from .auth import generate_session_token, hash_password, verify_password
-from .database import fetch_user_with_skills, get_db_connection, safe_json_loads
+try:
+    from .ai_service import (
+        evaluate_compatibility,
+        generate_ai_chat_response,
+        generate_ai_learning_plan,
+        generate_profile_or_skill_suggestion,
+        generate_session_blueprint,
+        parse_natural_language_intent,
+    )
+    from .auth import generate_session_token, hash_password, verify_password
+    from .database import fetch_user_with_skills, get_db_connection, safe_json_loads
+except ImportError:
+    from ai_service import (  # type: ignore
+        evaluate_compatibility,
+        generate_ai_chat_response,
+        generate_ai_learning_plan,
+        generate_profile_or_skill_suggestion,
+        generate_session_blueprint,
+        parse_natural_language_intent,
+    )
+    from auth import generate_session_token, hash_password, verify_password  # type: ignore
+    from database import fetch_user_with_skills, get_db_connection, safe_json_loads  # type: ignore
 
 
 def normalize_category(raw_category: str = "") -> str:
@@ -108,6 +120,11 @@ def resolve_user_from_token(authorization: Optional[str]) -> Optional[Dict[str, 
         conn.close()
 
 
+def resolve_token_user_id(authorization: Optional[str]) -> Optional[int]:
+    user = resolve_user_from_token(authorization)
+    return int(user["id"]) if user and "id" in user else None
+
+
 def require_authenticated_user(authorization: Optional[str]) -> Dict[str, Any]:
     user = resolve_user_from_token(authorization)
     if not user:
@@ -168,6 +185,8 @@ def get_enriched_requests(viewer_id: int) -> List[Dict[str, Any]]:
     finally:
         conn.close()
 
+
+app: Any = None
 
 if FASTAPI_AVAILABLE:
     app = FastAPI(
@@ -392,22 +411,38 @@ if FASTAPI_AVAILABLE:
         finally:
             conn.close()
 
+    @app.get("/")
+    def root():
+        return {
+            "message": "SkillSwap API is running",
+            "status": "ok",
+            "docs": "/docs",
+            "health": "/health",
+        }
+
+    @app.get("/health")
     @app.get("/api/health")
     def health_check():
-        conn, dialect = get_db_connection()
         try:
-            cur = conn.cursor()
-            cur.execute("SELECT COUNT(*) as c FROM profiles")
-            row = cur.fetchone()
-            profile_count = int(dict(row)["c"]) if row else 0
+            conn, dialect = get_db_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) as c FROM profiles")
+                row = cur.fetchone()
+                profile_count = int(dict(row)["c"]) if row else 0
+                return {
+                    "status": "ok",
+                    "service": "SkillSwap FastAPI Backend",
+                    "database": dialect,
+                    "profiles": profile_count,
+                }
+            finally:
+                conn.close()
+        except Exception:
             return {
                 "status": "ok",
                 "service": "SkillSwap FastAPI Backend",
-                "database": dialect,
-                "profiles": profile_count,
             }
-        finally:
-            conn.close()
 
     @app.get("/api/bootstrap")
     @app.get("/api/directory")
@@ -1367,7 +1402,7 @@ if FASTAPI_AVAILABLE:
 
     dist_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
     if os.path.isdir(dist_dir):
-        app.mount("/", StaticFiles(directory=dist_dir, html=True), name="static")
+        app.mount("/app", StaticFiles(directory=dist_dir, html=True), name="static")
 
 
 

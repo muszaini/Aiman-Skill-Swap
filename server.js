@@ -552,8 +552,8 @@ const server = http.createServer(async (req, res) => {
 
     // --- API ROUTES ---
 
-    // 0. GET /api/health (Deployment & Readiness Check)
-    if (pathname === '/api/health' && method === 'GET') {
+    // 0. GET /health and GET /api/health (Deployment & Readiness Check)
+    if ((pathname === '/api/health' || pathname === '/health') && method === 'GET') {
       const counts = {
         profiles: db.prepare('SELECT COUNT(*) as c FROM profiles').get().c,
         skills: db.prepare('SELECT COUNT(*) as c FROM skills').get().c,
@@ -568,6 +568,59 @@ const server = http.createServer(async (req, res) => {
         database: 'connected',
         tables: counts
       });
+    }
+
+    // 0b. GET /openapi.json and GET /docs (Interactive API Documentation)
+    if (pathname === '/openapi.json' && method === 'GET') {
+      return sendJson(res, 200, {
+        openapi: '3.1.0',
+        info: {
+          title: 'SkillSwap Reciprocal Learning API',
+          version: '2.0.0',
+          description: 'Production API for peer-to-peer skill exchange, AI matching, and session scheduling.'
+        },
+        paths: {
+          '/': { get: { summary: 'Root Status / Web App', responses: { '200': { description: 'OK' } } } },
+          '/health': { get: { summary: 'Health Check', responses: { '200': { description: 'OK' } } } },
+          '/api/health': { get: { summary: 'API Health Check', responses: { '200': { description: 'OK' } } } },
+          '/api/bootstrap': { get: { summary: 'Directory, Matches, & Dashboard Bootstrap', responses: { '200': { description: 'OK' } } } },
+          '/api/auth/register': { post: { summary: 'Register Member', responses: { '201': { description: 'Created' } } } },
+          '/api/auth/login': { post: { summary: 'Login Member', responses: { '200': { description: 'OK' } } } },
+          '/api/profile': { put: { summary: 'Update Authenticated Profile', responses: { '200': { description: 'OK' } } } },
+          '/api/requests': { get: { summary: 'List Exchange Requests', responses: { '200': { description: 'OK' } } }, post: { summary: 'Create Exchange Request', responses: { '201': { description: 'Created' } } } },
+          '/api/dashboard': { get: { summary: 'Member Dashboard Summary', responses: { '200': { description: 'OK' } } } },
+          '/api/ai/chat': { post: { summary: 'AI Skill Match Assistant', responses: { '200': { description: 'OK' } } } },
+          '/api/ai/profile-helper': { post: { summary: 'AI Profile Bio & Skill Description Helper', responses: { '200': { description: 'OK' } } } },
+          '/api/ai/learning-plan': { post: { summary: 'Generate 4-Week AI Learning Plan', responses: { '200': { description: 'OK' } } } },
+          '/api/learning-plans': { get: { summary: 'List Saved Learning Plans', responses: { '200': { description: 'OK' } } }, post: { summary: 'Save Learning Plan', responses: { '201': { description: 'Created' } } } }
+        }
+      });
+    }
+
+    if (pathname === '/docs' && method === 'GET') {
+      const swaggerHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SkillSwap Reciprocal Learning API - Swagger UI</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = () => {
+      window.ui = SwaggerUIBundle({
+        url: '/openapi.json',
+        dom_id: '#swagger-ui'
+      });
+    };
+  </script>
+</body>
+</html>`;
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(swaggerHtml);
     }
 
     // 1. GET /api/bootstrap (and /api/directory, /api/matches)
@@ -1749,8 +1802,12 @@ const server = http.createServer(async (req, res) => {
       if (fs.existsSync(indexPath)) {
         return serveIndexHtmlWithBootstrap(indexPath);
       } else {
-        res.writeHead(404);
-        res.end('Not Found');
+        return sendJson(res, 200, {
+          message: 'SkillSwap API is running',
+          status: 'ok',
+          docs: '/docs',
+          health: '/health'
+        });
       }
     }
   } catch (err) {

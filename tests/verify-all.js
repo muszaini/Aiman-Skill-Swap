@@ -627,6 +627,14 @@ async function runLiveHttpAudit() {
   assert.strictEqual(healthRes.data.status, 'ok');
   assert.strictEqual(healthRes.data.database, 'connected');
 
+  const rootHealthRes = await reqJson('GET', '/health');
+  assert.strictEqual(rootHealthRes.status, 200, 'GET /health must return 200');
+  assert.strictEqual(rootHealthRes.data.status, 'ok');
+
+  const docsRes = await invokeServer('GET', '/docs');
+  assert.strictEqual(docsRes.status, 200, 'GET /docs must return 200');
+  assert.ok(docsRes.text.includes('swagger-ui'), 'GET /docs must serve Swagger UI documentation');
+
   // 11.2 Bootstrap & Directory Filters
   const bootRes = await reqJson('GET', '/api/bootstrap?viewerId=1&category=Design&proficiency=Advanced');
   assert.strictEqual(bootRes.status, 200, 'GET /api/bootstrap with filters must return 200');
