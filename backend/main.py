@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 try:
     from fastapi import Depends, FastAPI, Header, HTTPException, Query
     from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import HTMLResponse
     from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
 
@@ -20,6 +21,7 @@ try:
 except ImportError:
     FASTAPI_AVAILABLE = False
     BaseModel = object  # type: ignore
+    HTMLResponse = lambda content, **kw: content  # type: ignore
 
     class HTTPException(Exception):  # type: ignore
         def __init__(self, status_code: int, detail: str):
@@ -182,6 +184,38 @@ def get_enriched_requests(viewer_id: int) -> List[Dict[str, Any]]:
             d["ai_session_agenda"] = safe_json_loads(d.get("ai_session_agenda"), [])
             results.append(d)
         return results
+    finally:
+        conn.close()
+
+
+def get_enriched_exchanges(viewer_id: int) -> List[Dict[str, Any]]:
+    conn, _ = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT c.*,
+              ua.name as partner_a_name, ua.handle as partner_a_handle,
+              ua.avatar_initials as partner_a_initials, ua.avatar_bg as partner_a_bg,
+              ua.role_title as partner_a_role,
+              ub.name as partner_b_name, ub.handle as partner_b_handle,
+              ub.avatar_initials as partner_b_initials, ub.avatar_bg as partner_b_bg,
+              ub.role_title as partner_b_role
+            FROM completed_exchanges c
+            JOIN users ua ON c.partner_a_id = ua.id
+            JOIN users ub ON c.partner_b_id = ub.id
+            ORDER BY c.id DESC
+            """
+        )
+        results = []
+        for row in cur.fetchall():
+            d = dict(row)
+            d["involves_viewer"] = int(d["partner_a_id"]) == int(viewer_id) or int(d["partner_b_id"]) == int(viewer_id)
+            d["takeaways"] = safe_json_loads(d.get("takeaways"), [])
+            results.append(d)
+        return results
+    except Exception:
+        return []
     finally:
         conn.close()
 
@@ -413,6 +447,37 @@ if FASTAPI_AVAILABLE:
 
     @app.get("/")
     def root():
+        dist_index = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "frontend", "dist", "index.html"
+        )
+        if os.path.isfile(dist_index):
+            with open(dist_index, "r", encoding="utf-8") as f:
+                html = f.read()
+            try:
+                initial_data = get_directory_and_matches(
+                    viewerId=1,
+                    query="",
+                    category="all",
+                    proficiency="all",
+                    learningPreference="all",
+                    matchMode="all",
+                    authorization=None,
+                )
+                script_tag = f"<script>window.__INITIAL_BOOTSTRAP__ = {json.dumps(initial_data)};</script>"
+                html = html.replace("</head>", f"{script_tag}\n</head>")
+            except Exception:
+                pass
+            return HTMLResponse(content=html, status_code=200)
+        return {
+            "message": "SkillSwap API is running",
+            "status": "ok",
+            "docs": "/docs",
+            "health": "/health",
+        }
+
+    @app.get("/api")
+    @app.get("/api/status")
+    def api_status():
         return {
             "message": "SkillSwap API is running",
             "status": "ok",
@@ -554,6 +619,9 @@ if FASTAPI_AVAILABLE:
         finally:
             conn2.close()
 
+        completed_exchanges = get_enriched_exchanges(vid)
+        total_hours = sum(int(u.get("hours_exchanged") or 0) for u in all_users)
+
         return {
             "token": token,
             "viewer": viewer,
@@ -563,8 +631,15 @@ if FASTAPI_AVAILABLE:
             "matchingCount": len(candidates),
             "queryIntent": query_intent,
             "requests": dash_payload["requests"],
+            "completedExchanges": completed_exchanges,
             "dashboard": dash_payload["dashboard"],
             "learningPlans": plans,
+            "stats": {
+                "communityMembers": len(all_users),
+                "completedExchangesCount": len(completed_exchanges),
+                "totalHoursSaved": int(total_hours),
+                "activeMatchesCount": sum(1 for c in candidates if c["aiMatch"]["score"] >= 88),
+            },
         }
 
     @app.post("/api/auth/switch")
@@ -807,6 +882,28 @@ if FASTAPI_AVAILABLE:
         pending_in = [r for r in requests if r.get("status") == "pending" and r.get("direction") == "incoming"]
         pending_out = [r for r in requests if r.get("status") == "pending" and r.get("direction") == "outgoing"]
         accepted_list = [r for r in requests if r.get("status") == "accepted"]
+        upcoming_exchanges = []
+        for r in accepted_list:
+            is_inc = r.get("direction") == "incoming"
+            upcoming_exchanges.append(
+                {
+                    "id": r.get("id"),
+                    "requestId": r.get("id"),
+                    "direction": r.get("direction"),
+                    "partnerName": r.get("requester_name") if is_inc else r.get("recipient_name"),
+                    "partnerRole": r.get("requester_role") if is_inc else r.get("recipient_role"),
+                    "partnerInitials": r.get("requester_initials") if is_inc else r.get("recipient_initials"),
+                    "partnerBg": r.get("requester_bg") if is_inc else r.get("recipient_bg"),
+                    "youTeach": r.get("wanted_skill_name") if is_inc else r.get("offered_skill_name"),
+                    "partnerTeaches": r.get("offered_skill_name") if is_inc else r.get("wanted_skill_name"),
+                    "sessionDatetime": r.get("session_datetime") or r.get("proposed_slot"),
+                    "sessionMode": r.get("session_mode") or "Online",
+                    "meetingLinkOrLocation": r.get("meeting_link_or_location") or "",
+                    "sessionNotes": r.get("session_notes") or r.get("learning_goal") or "",
+                    "scheduleStatus": r.get("schedule_status") or "proposed",
+                    "durationMins": r.get("duration_mins") or 60,
+                }
+            )
         completed_list = [r for r in requests if r.get("status") == "completed"]
         ratings = [
             int(r["rating_given"])
@@ -827,7 +924,7 @@ if FASTAPI_AVAILABLE:
                     "pendingIncoming": pending_in,
                     "pendingOutgoing": pending_out,
                 },
-                "upcomingExchanges": accepted_list,
+                "upcomingExchanges": upcoming_exchanges,
                 "summaryMetrics": {
                     "totalCompletedCount": len(completed_list),
                     "averageRating": avg_rating,
@@ -1401,6 +1498,9 @@ if FASTAPI_AVAILABLE:
         return {"agenda": agenda, "suggestedMessage": pitch}
 
     dist_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+    assets_dir = os.path.join(dist_dir, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
     if os.path.isdir(dist_dir):
         app.mount("/app", StaticFiles(directory=dist_dir, html=True), name="static")
 
