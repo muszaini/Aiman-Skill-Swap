@@ -220,6 +220,23 @@ def get_enriched_exchanges(viewer_id: int) -> List[Dict[str, Any]]:
         conn.close()
 
 
+def find_frontend_dist_dir() -> str:
+    here = os.path.dirname(os.path.abspath(__file__))
+    parent = os.path.dirname(here)
+    cwd = os.getcwd()
+    candidates = [
+        os.path.join(parent, "frontend", "dist"),
+        os.path.join(here, "dist"),
+        os.path.join(cwd, "frontend", "dist"),
+        os.path.join(cwd, "backend", "dist"),
+        os.path.join(cwd, "dist"),
+    ]
+    for c in candidates:
+        if os.path.isfile(os.path.join(c, "index.html")):
+            return c
+    return candidates[0]
+
+
 app: Any = None
 
 if FASTAPI_AVAILABLE:
@@ -447,9 +464,8 @@ if FASTAPI_AVAILABLE:
 
     @app.get("/")
     def root():
-        dist_index = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "frontend", "dist", "index.html"
-        )
+        dist_dir_path = find_frontend_dist_dir()
+        dist_index = os.path.join(dist_dir_path, "index.html")
         if os.path.isfile(dist_index):
             with open(dist_index, "r", encoding="utf-8") as f:
                 html = f.read()
@@ -467,13 +483,16 @@ if FASTAPI_AVAILABLE:
                 html = html.replace("</head>", f"{script_tag}\n</head>")
             except Exception:
                 pass
-            return HTMLResponse(content=html, status_code=200)
-        return {
-            "message": "SkillSwap API is running",
-            "status": "ok",
-            "docs": "/docs",
-            "health": "/health",
-        }
+            return HTMLResponse(
+                content=html,
+                status_code=200,
+                headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+            )
+        return HTMLResponse(
+            content="""<!DOCTYPE html><html><head><meta charset="utf-8"><title>SkillSwap</title><link rel="stylesheet" href="/assets/index-dFjtyFob.css"></head><body><div id="root"></div><script type="module" src="/assets/index-DYe6OfdD.js"></script></body></html>""",
+            status_code=200,
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+        )
 
     @app.get("/api")
     @app.get("/api/status")
@@ -1497,7 +1516,7 @@ if FASTAPI_AVAILABLE:
         pitch = f"Hi {first_name}! Let's swap a 50/50 session trading {payload.offeredSkillName} for {payload.wantedSkillName}."
         return {"agenda": agenda, "suggestedMessage": pitch}
 
-    dist_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+    dist_dir = find_frontend_dist_dir()
     assets_dir = os.path.join(dist_dir, "assets")
     if os.path.isdir(assets_dir):
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")

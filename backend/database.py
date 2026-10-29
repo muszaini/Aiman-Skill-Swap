@@ -4,23 +4,38 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-SQLITE_DB_PATH = BASE_DIR / "skillswap.db"
+BACKEND_DIR = Path(__file__).resolve().parent
+BASE_DIR = BACKEND_DIR.parent
+SQLITE_DB_PATH = (
+    BASE_DIR / "skillswap.db"
+    if (BASE_DIR / "skillswap.db").is_file()
+    else BACKEND_DIR / "skillswap.db"
+)
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 
 def get_db_connection():
     """
     Returns a database connection.
-    Uses Supabase PostgreSQL when DATABASE_URL is set to a postgresql:// URI,
+    Uses Supabase PostgreSQL when DATABASE_URL is set and application tables exist,
     otherwise uses the persistent local SQLite database (skillswap.db).
     """
     if DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://"):
-        import psycopg2
-        from psycopg2.extras import RealDictCursor
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
 
-        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-        return conn, "postgres"
+            conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users') AS has_users"
+            )
+            row = cur.fetchone()
+            if row and dict(row).get("has_users"):
+                return conn, "postgres"
+            conn.close()
+        except Exception:
+            pass
 
     conn = sqlite3.connect(str(SQLITE_DB_PATH))
     conn.row_factory = sqlite3.Row
