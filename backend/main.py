@@ -351,48 +351,67 @@ if FASTAPI_AVAILABLE:
     def login(payload: LoginInput):
         conn, dialect = get_db_connection()
         ph = "%s" if dialect == "postgres" else "?"
-        ident = payload.email.strip().lower()
+        ident = payload.email.strip().lower().lstrip("@")
+        user_dict = None
         try:
             cur = conn.cursor()
             cur.execute(
-                f"SELECT * FROM users WHERE LOWER(email) = {ph} OR LOWER(handle) = {ph}",
-                (ident, ident),
+                f"SELECT * FROM users WHERE LOWER(email) = {ph} OR LOWER(handle) = {ph} OR LOWER(name) = {ph}",
+                (ident, ident, ident),
             )
             row = cur.fetchone()
             if not row:
-                raise HTTPException(status_code=401, detail="Account not found")
+                raise HTTPException(
+                    status_code=401,
+                    detail="Account not found. Try maya@skillswap.io (password: skillswap123) or create a new account.",
+                )
             user_dict = dict(row)
             if not verify_password(payload.password, user_dict.get("password_hash")):
-                raise HTTPException(status_code=401, detail="Invalid credentials")
-
-            token = issue_session_token(int(user_dict["id"]))
-            return {
-                "token": token,
-                "user": fetch_user_with_skills(int(user_dict["id"]), include_private_email=True),
-            }
+                raise HTTPException(
+                    status_code=401,
+                    detail="Incorrect password. (Demo accounts use password: skillswap123)",
+                )
         finally:
             conn.close()
 
-    @app.post("/api/auth/register")
+        uid = int(user_dict["id"])
+        token = issue_session_token(uid)
+        user_obj = fetch_user_with_skills(uid, include_private_email=True)
+        return {
+            "token": token,
+            "user": user_obj,
+            "viewer": user_obj,
+        }
+
+    @app.post("/api/auth/register", status_code=201)
     def register(payload: RegisterInput):
-        if len(payload.password) < 6:
-            raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+        if not payload.password or len(payload.password.strip()) < 3:
+            raise HTTPException(status_code=400, detail="Password must be at least 3 characters.")
+        if not payload.name or not payload.name.strip():
+            raise HTTPException(status_code=400, detail="Display name is required.")
+        if not payload.email or not payload.email.strip():
+            raise HTTPException(status_code=400, detail="Email address is required.")
+
         conn, dialect = get_db_connection()
         ph = "%s" if dialect == "postgres" else "?"
         email = payload.email.strip().lower()
         slug = "".join(c for c in payload.name.lower() if c.isalnum()) or "member"
         handle = f"{slug}_{random.randint(100, 999)}"
-        initials = "".join(p[0] for p in payload.name.split()[:2]).upper() or "SS"
+        initials = "".join(p[0] for p in payload.name.split()[:2] if p).upper() or "SS"
         preferred_format = (
             payload.preferred_format
             if payload.preferred_format in ("Online", "In person", "Either")
             else "Online"
         )
+        new_uid = None
         try:
             cur = conn.cursor()
             cur.execute(f"SELECT id FROM users WHERE LOWER(email) = {ph}", (email,))
             if cur.fetchone():
-                raise HTTPException(status_code=409, detail="Email already registered")
+                raise HTTPException(
+                    status_code=409,
+                    detail="That email is already registered. Please switch to 'Sign In with Credentials' to log in.",
+                )
 
             pass_hash = hash_password(payload.password)
             cur.execute(
@@ -408,16 +427,16 @@ if FASTAPI_AVAILABLE:
                     handle,
                     email,
                     pass_hash,
-                    payload.role_title.strip(),
-                    payload.bio.strip() or "Excited to exchange skills with peers!",
-                    json.dumps(payload.interests),
+                    (payload.role_title or "SkillSwap Community Member").strip() or "SkillSwap Community Member",
+                    (payload.bio or "").strip() or "Excited to exchange skills with peers!",
+                    json.dumps(payload.interests or ["Peer Learning", "Skill Exchange"]),
                     initials,
                     "#0F766E",
-                    payload.location.strip(),
-                    payload.timezone.strip(),
-                    json.dumps(payload.availability),
+                    (payload.location or "Remote").strip() or "Remote",
+                    (payload.timezone or "UTC").strip() or "UTC",
+                    json.dumps(payload.availability or ["Weekday Evenings", "Saturday Mornings"]),
                     preferred_format,
-                    payload.session_length_mins,
+                    payload.session_length_mins or 60,
                     json.dumps(["English"]),
                 ),
             )
@@ -454,13 +473,16 @@ if FASTAPI_AVAILABLE:
                         ),
                     )
             conn.commit()
-            token = issue_session_token(new_uid)
-            return {
-                "token": token,
-                "user": fetch_user_with_skills(new_uid, include_private_email=True),
-            }
         finally:
             conn.close()
+
+        token = issue_session_token(new_uid)
+        user_obj = fetch_user_with_skills(new_uid, include_private_email=True)
+        return {
+            "token": token,
+            "user": user_obj,
+            "viewer": user_obj,
+        }
 
     @app.get("/")
     def root():
@@ -489,7 +511,7 @@ if FASTAPI_AVAILABLE:
                 headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
             )
         return HTMLResponse(
-            content="""<!DOCTYPE html><html><head><meta charset="utf-8"><title>SkillSwap</title><link rel="stylesheet" href="/assets/index-dFjtyFob.css"></head><body><div id="root"></div><script type="module" src="/assets/index-DYe6OfdD.js"></script></body></html>""",
+            content="""<!DOCTYPE html><html><head><meta charset="utf-8"><title>SkillSwap</title><link rel="stylesheet" href="/assets/index-dFjtyFob.css"></head><body><div id="root"></div><script type="module" src="/assets/index-HZiG4i4O.js"></script></body></html>""",
             status_code=200,
             headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
         )

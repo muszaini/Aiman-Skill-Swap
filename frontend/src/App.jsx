@@ -151,7 +151,9 @@ export default function App() {
 
   // Auth / Register Modal State (Objective 3: Secure Registration & Login)
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState('register'); // 'login' | 'register'
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
+  const [authError, setAuthError] = useState(null);
+  const [authLoading, setAuthLoading] = useState(false);
   const [loginForm, setLoginForm] = useState({ email: 'maya@skillswap.io', password: 'skillswap123' });
   const [regForm, setRegForm] = useState({
     name: '',
@@ -230,82 +232,115 @@ export default function App() {
 
   const apiFetch = useCallback(
     async (url, options = {}) => {
-      const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
+      const { tokenOverride, ...fetchOpts } = options;
+      const effectiveToken = tokenOverride !== undefined ? tokenOverride : authToken;
+      const headers = { 'Content-Type': 'application/json', ...(fetchOpts.headers || {}) };
+      if (effectiveToken) {
+        headers['Authorization'] = `Bearer ${effectiveToken}`;
       }
-      const res = await fetch(url, { ...options, headers });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || data.detail || 'Request failed');
+
+      const tryRequest = async (targetUrl) => {
+        const res = await fetch(targetUrl, { ...fetchOpts, headers });
+        const text = await res.text();
+        let data = null;
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          data = null;
+        }
+        return { res, data, text };
+      };
+
+      let result = await tryRequest(url);
+      if (
+        result.data === null &&
+        url.startsWith('/api/') &&
+        typeof window !== 'undefined' &&
+        !window.location.origin.includes('aiman-skill-swap.onrender.com')
+      ) {
+        result = await tryRequest(`https://aiman-skill-swap.onrender.com${url}`);
       }
-      return data;
+
+      if (result.data === null) {
+        throw new Error(`Server returned unexpected response (${result.res.status}). Please try again.`);
+      }
+      if (!result.res.ok) {
+        throw new Error(result.data.error || result.data.detail || 'Request failed');
+      }
+      return result.data;
     },
     [authToken]
   );
 
-  const loadBootstrap = useCallback(async () => {
-    try {
-      setDirectoryError(null);
-      const params = new URLSearchParams({
-        viewerId: String(viewerId),
-        query: activeSearchQuery,
-        category: activeCategory,
-        proficiency: activeProficiency,
-        learningPreference: activeLearningPreference,
-        matchMode: activeMatchMode
-      });
-      const data = await apiFetch(`/api/bootstrap?${params.toString()}`);
-      if (data.token && !authToken) {
-        setAuthToken(data.token);
-        localStorage.setItem('skillswap_token', data.token);
-      }
-      setViewer(data.viewer);
-      if (data.viewer?.id) {
-        localStorage.setItem('skillswap_viewer_id', String(data.viewer.id));
-      }
-      setAllUsers(data.allUsers || []);
-      setCandidates(data.candidates || []);
-      setTotalDirectoryCount(
-        data.totalDirectoryCount !== undefined
-          ? data.totalDirectoryCount
-          : (data.candidates || []).length
-      );
-      setQueryIntent(data.queryIntent || null);
-      setRequests(data.requests || []);
-      setCompletedExchanges(data.completedExchanges || []);
-      setLearningPlans(data.learningPlans || []);
-      setDashboard(data.dashboard || null);
-      setStats(data.stats || {});
-
-      if (data.viewer) {
-        setProfForm({
-          name: data.viewer.name || '',
-          role_title: data.viewer.role_title || '',
-          bio: data.viewer.bio || '',
-          interests_text: (data.viewer.interests || []).join(', '),
-          preferred_format: data.viewer.preferred_format || 'Online',
-          location: data.viewer.location || '',
-          timezone: data.viewer.timezone || '',
-          session_length_mins: data.viewer.session_length_mins || 60,
-          availability: data.viewer.availability || []
+  const loadBootstrap = useCallback(
+    async (overrideViewerId = null, overrideToken = null) => {
+      try {
+        setDirectoryError(null);
+        const effectiveViewerId = overrideViewerId !== null ? overrideViewerId : viewerId;
+        const effectiveToken = overrideToken !== null ? overrideToken : authToken;
+        const params = new URLSearchParams({
+          viewerId: String(effectiveViewerId),
+          query: activeSearchQuery,
+          category: activeCategory,
+          proficiency: activeProficiency,
+          learningPreference: activeLearningPreference,
+          matchMode: activeMatchMode
         });
+        const data = await apiFetch(`/api/bootstrap?${params.toString()}`, {
+          tokenOverride: effectiveToken
+        });
+        if (data.token && !effectiveToken) {
+          setAuthToken(data.token);
+          localStorage.setItem('skillswap_token', data.token);
+        }
+        if (data.viewer) {
+          setViewer(data.viewer);
+          localStorage.setItem('skillswap_viewer_id', String(data.viewer.id));
+        }
+        setAllUsers(data.allUsers || []);
+        setCandidates(data.candidates || []);
+        setTotalDirectoryCount(
+          data.totalDirectoryCount !== undefined
+            ? data.totalDirectoryCount
+            : (data.candidates || []).length
+        );
+        setQueryIntent(data.queryIntent || null);
+        setRequests(data.requests || []);
+        setCompletedExchanges(data.completedExchanges || []);
+        setLearningPlans(data.learningPlans || []);
+        setDashboard(data.dashboard || null);
+        setStats(data.stats || {});
+
+        if (data.viewer) {
+          setProfForm({
+            name: data.viewer.name || '',
+            role_title: data.viewer.role_title || '',
+            bio: data.viewer.bio || '',
+            interests_text: (data.viewer.interests || []).join(', '),
+            preferred_format: data.viewer.preferred_format || 'Online',
+            location: data.viewer.location || '',
+            timezone: data.viewer.timezone || '',
+            session_length_mins: data.viewer.session_length_mins || 60,
+            availability: data.viewer.availability || []
+          });
+        }
+      } catch (err) {
+        setDirectoryError(err.message || 'Unable to filter member directory. Please try again.');
+        addToast(err.message);
       }
-    } catch (err) {
-      setDirectoryError(err.message || 'Unable to filter member directory. Please try again.');
-      addToast(err.message);
-    }
-  }, [
-    viewerId,
-    activeSearchQuery,
-    activeCategory,
-    activeProficiency,
-    activeLearningPreference,
-    activeMatchMode,
-    authToken,
-    apiFetch,
-    addToast
-  ]);
+    },
+    [
+      viewerId,
+      activeSearchQuery,
+      activeCategory,
+      activeProficiency,
+      activeLearningPreference,
+      activeMatchMode,
+      authToken,
+      apiFetch,
+      addToast
+    ]
+  );
 
   useEffect(() => {
     loadBootstrap();
@@ -610,6 +645,7 @@ export default function App() {
     }
     localStorage.removeItem('skillswap_token');
     setAuthToken('');
+    setAuthError(null);
     setAuthMode('login');
     setAuthModalOpen(true);
     addToast('Signed out of current session.');
@@ -624,8 +660,10 @@ export default function App() {
       });
       setAuthToken(res.token);
       localStorage.setItem('skillswap_token', res.token);
+      setViewer(res.user);
       setViewerId(res.user.id);
       localStorage.setItem('skillswap_viewer_id', String(res.user.id));
+      await loadBootstrap(res.user.id, res.token);
       addToast(`Authenticated as ${res.user.name} (@${res.user.handle})`);
     } catch (err) {
       setViewerId(Number(targetUserId));
@@ -633,55 +671,86 @@ export default function App() {
   };
 
   // Handle Login Submit
-  const handleLoginSubmit = async (e) => {
-    e.preventDefault();
+  const handleLoginSubmit = async (e, quickCredentials = null) => {
+    if (e) e.preventDefault();
+    const creds = quickCredentials || loginForm;
+    if (!creds.email || !creds.email.trim() || !creds.password) {
+      setAuthError('Please enter both your email/handle and password.');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError(null);
     try {
       const res = await apiFetch('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify(loginForm)
+        body: JSON.stringify({
+          email: creds.email.trim(),
+          password: creds.password
+        })
       });
       setAuthToken(res.token);
       localStorage.setItem('skillswap_token', res.token);
-      setViewerId(res.user.id);
-      localStorage.setItem('skillswap_viewer_id', String(res.user.id));
+      if (res.user) {
+        setViewer(res.user);
+        setViewerId(res.user.id);
+        localStorage.setItem('skillswap_viewer_id', String(res.user.id));
+      }
+      await loadBootstrap(res.user?.id, res.token);
       setAuthModalOpen(false);
-      addToast(`Signed in securely as ${res.user.name}!`);
+      addToast(`✓ Signed in securely as ${res.user?.name || creds.email}!`);
     } catch (err) {
+      setAuthError(err.message || 'Unable to sign in. Please check your email and password.');
       addToast(err.message);
+    } finally {
+      setAuthLoading(false);
     }
   };
 
   // Handle Registration Submit
   const handleRegisterSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
+    if (!regForm.name.trim() || !regForm.email.trim() || !regForm.password) {
+      setAuthError('Please fill in Display Name, Email Address, and Password.');
+      return;
+    }
+    if (regForm.password.trim().length < 3) {
+      setAuthError('Password must be at least 3 characters.');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError(null);
     try {
+      const offerSkillName = regForm.offer_skill.trim() || 'Excel & Spreadsheet Modeling';
+      const wantSkillName = regForm.want_skill.trim() || 'Beginner Python Lessons';
       const payload = {
-        name: regForm.name,
-        email: regForm.email,
+        name: regForm.name.trim(),
+        email: regForm.email.trim(),
         password: regForm.password,
-        role_title: regForm.role_title,
-        interests: regForm.interests
+        role_title: regForm.role_title.trim() || 'SkillSwap Community Member',
+        interests: (regForm.interests || 'Peer Learning, Skill Exchange')
           .split(',')
           .map((s) => s.trim())
           .filter(Boolean),
-        preferred_format: regForm.preferred_format,
-        location: regForm.location,
-        timezone: regForm.timezone,
-        bio: regForm.bio,
+        preferred_format: regForm.preferred_format || 'Online',
+        location: regForm.location.trim() || 'Remote',
+        timezone: regForm.timezone.trim() || 'UTC',
+        bio:
+          regForm.bio.trim() ||
+          `Offering 1-on-1 coaching in ${offerSkillName} and excited to learn ${wantSkillName}.`,
         offers: [
           {
-            skill_name: regForm.offer_skill,
-            category: regForm.offer_category,
+            skill_name: offerSkillName,
+            category: regForm.offer_category || 'Business',
             level: regForm.offer_level || 'Intermediate',
-            description: regForm.offer_desc || `Practical 1-on-1 coaching in ${regForm.offer_skill}`
+            description: regForm.offer_desc || `Practical 1-on-1 coaching in ${offerSkillName}`
           }
         ],
         wants: [
           {
-            skill_name: regForm.want_skill,
-            category: regForm.want_category,
+            skill_name: wantSkillName,
+            category: regForm.want_category || 'Technology',
             level: regForm.want_level || 'Beginner',
-            description: regForm.want_desc || `Looking to learn hands-on ${regForm.want_skill}`
+            description: regForm.want_desc || `Looking to learn hands-on ${wantSkillName}`
           }
         ]
       };
@@ -691,13 +760,23 @@ export default function App() {
       });
       setAuthToken(res.token);
       localStorage.setItem('skillswap_token', res.token);
-      setViewerId(res.user.id);
-      localStorage.setItem('skillswap_viewer_id', String(res.user.id));
+      if (res.user) {
+        setViewer(res.user);
+        setViewerId(res.user.id);
+        localStorage.setItem('skillswap_viewer_id', String(res.user.id));
+        setAllUsers((prev) =>
+          prev.some((u) => Number(u.id) === Number(res.user.id)) ? prev : [...prev, res.user]
+        );
+      }
+      await loadBootstrap(res.user?.id, res.token);
       setAuthModalOpen(false);
       setActiveTab('discover');
-      addToast(`Welcome to SkillSwap, ${res.user.name}! AI calculated your reciprocal matches.`);
+      addToast(`✓ Welcome to SkillSwap, ${res.user?.name}! AI calculated your reciprocal matches.`);
     } catch (err) {
+      setAuthError(err.message || 'Registration failed. Please check your details and try again.');
       addToast(err.message);
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -1146,12 +1225,22 @@ export default function App() {
             <button
               className="btn-outline-sm"
               onClick={() => {
-                setAuthMode('register');
+                setAuthError(null);
+                setAuthMode('login');
                 setAuthModalOpen(true);
               }}
             >
-              Sign In / Register
+              {authToken && viewer?.name ? `✓ ${viewer.name.split(' ')[0]} • Switch / Register` : 'Sign In / Register'}
             </button>
+            {authToken && (
+              <button
+                className="btn-outline-sm"
+                style={{ color: '#B91C1C', borderColor: '#FECACA' }}
+                onClick={handleLogout}
+              >
+                Sign Out
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -4655,22 +4744,108 @@ export default function App() {
             <div className="auth-tabs">
               <button
                 type="button"
-                className={`auth-tab-btn ${authMode === 'register' ? 'active' : ''}`}
-                onClick={() => setAuthMode('register')}
-              >
-                Create New Account
-              </button>
-              <button
-                type="button"
                 className={`auth-tab-btn ${authMode === 'login' ? 'active' : ''}`}
-                onClick={() => setAuthMode('login')}
+                onClick={() => {
+                  setAuthError(null);
+                  setAuthMode('login');
+                }}
               >
                 Sign In with Credentials
               </button>
+              <button
+                type="button"
+                className={`auth-tab-btn ${authMode === 'register' ? 'active' : ''}`}
+                onClick={() => {
+                  setAuthError(null);
+                  setAuthMode('register');
+                }}
+              >
+                Create New Account
+              </button>
             </div>
+
+            {authError && (
+              <div
+                role="alert"
+                style={{
+                  backgroundColor: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  color: '#991B1B',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  marginBottom: '14px',
+                  fontSize: '0.86rem',
+                  fontWeight: 600,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}
+              >
+                <span>⚠️ {authError}</span>
+                <button
+                  type="button"
+                  onClick={() => setAuthError(null)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#991B1B',
+                    cursor: 'pointer',
+                    fontWeight: 700
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
 
             {authMode === 'login' ? (
               <form onSubmit={handleLoginSubmit}>
+                <div
+                  style={{
+                    backgroundColor: '#F0FDFA',
+                    border: '1px solid #CCFBF1',
+                    borderRadius: '10px',
+                    padding: '10px 12px',
+                    marginBottom: '14px'
+                  }}
+                >
+                  <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#0F766E', marginBottom: '6px' }}>
+                    QUICK DEMO SIGN-IN (1-CLICK):
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {[
+                      { label: 'Maya Lin (Excel)', email: 'maya@skillswap.io' },
+                      { label: 'Lucas Rivera (Design)', email: 'lucas@skillswap.io' },
+                      { label: 'Tariq Al-Mansoor (Python)', email: 'tariq@skillswap.io' },
+                      { label: 'Priya Patel (English)', email: 'priya@skillswap.io' }
+                    ].map((demo) => (
+                      <button
+                        key={demo.email}
+                        type="button"
+                        disabled={authLoading}
+                        onClick={() => {
+                          const nextCreds = { email: demo.email, password: 'skillswap123' };
+                          setLoginForm(nextCreds);
+                          handleLoginSubmit(null, nextCreds);
+                        }}
+                        style={{
+                          fontSize: '0.75rem',
+                          padding: '5px 10px',
+                          borderRadius: '999px',
+                          border: '1px solid #99F6E4',
+                          backgroundColor: '#FFFFFF',
+                          color: '#0F766E',
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Sign in as {demo.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="form-group">
                   <label>Email or Handle</label>
                   <input
@@ -4692,7 +4867,7 @@ export default function App() {
                     required
                   />
                   <span className="peer-submeta">
-                    Seeded demo accounts use password: <code>skillswap123</code>
+                    Demo accounts use password: <code>skillswap123</code> (or register your own account in the tab above).
                   </span>
                 </div>
                 <div className="modal-footer">
@@ -4703,8 +4878,8 @@ export default function App() {
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="btn btn-primary">
-                    Sign In
+                  <button type="submit" className="btn btn-primary" disabled={authLoading}>
+                    {authLoading ? 'Signing In...' : 'Sign In'}
                   </button>
                 </div>
               </form>
@@ -4712,22 +4887,22 @@ export default function App() {
               <form onSubmit={handleRegisterSubmit}>
                 <div className="form-row-2">
                   <div className="form-group">
-                    <label>Display Name (Public)</label>
+                    <label>Display Name (Public) *</label>
                     <input
                       type="text"
                       value={regForm.name}
                       onChange={(e) => setRegForm({ ...regForm, name: e.target.value })}
-                      placeholder="e.g., Jordan Chen"
+                      placeholder="e.g., Aiman Musa"
                       required
                     />
                   </div>
                   <div className="form-group">
-                    <label>Email Address (🔒 Private by Default)</label>
+                    <label>Email Address (🔒 Private by Default) *</label>
                     <input
                       type="email"
                       value={regForm.email}
                       onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
-                      placeholder="jordan@example.com"
+                      placeholder="aiman@example.com"
                       required
                     />
                   </div>
@@ -4735,19 +4910,19 @@ export default function App() {
 
                 <div className="form-row-3">
                   <div className="form-group">
-                    <label>Password (Never Public)</label>
+                    <label>Password (Never Public) *</label>
                     <input
                       type="password"
                       value={regForm.password}
                       onChange={(e) =>
                         setRegForm({ ...regForm, password: e.target.value })
                       }
-                      placeholder="••••••••"
+                      placeholder="At least 3 characters"
                       required
                     />
                   </div>
                   <div className="form-group">
-                    <label>Role / Headline (Public)</label>
+                    <label>Role / Headline (Optional)</label>
                     <input
                       type="text"
                       value={regForm.role_title}
@@ -4755,7 +4930,6 @@ export default function App() {
                         setRegForm({ ...regForm, role_title: e.target.value })
                       }
                       placeholder="e.g., Data Analyst & Designer"
-                      required
                     />
                   </div>
                   <div className="form-group">
@@ -4775,13 +4949,12 @@ export default function App() {
 
                 <div className="form-row-2">
                   <div className="form-group">
-                    <label>Short Bio (Public)</label>
+                    <label>Short Bio (Optional)</label>
                     <textarea
                       rows="2"
                       value={regForm.bio}
                       onChange={(e) => setRegForm({ ...regForm, bio: e.target.value })}
                       placeholder="Share what you love teaching and what you're excited to learn..."
-                      required
                     />
                   </div>
                   <div className="form-group">
@@ -4805,7 +4978,6 @@ export default function App() {
                         setRegForm({ ...regForm, offer_skill: e.target.value })
                       }
                       placeholder="e.g., Excel, English conversation"
-                      required
                     />
                     <div className="form-row-2">
                       <select
@@ -4844,7 +5016,6 @@ export default function App() {
                         setRegForm({ ...regForm, want_skill: e.target.value })
                       }
                       placeholder="e.g., Python, Graphic design"
-                      required
                     />
                     <div className="form-row-2">
                       <select
@@ -4883,8 +5054,8 @@ export default function App() {
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="btn btn-primary">
-                    Register &amp; Calculate AI Matches
+                  <button type="submit" className="btn btn-primary" disabled={authLoading}>
+                    {authLoading ? 'Creating Account...' : 'Register & Calculate AI Matches'}
                   </button>
                 </div>
               </form>

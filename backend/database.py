@@ -1,17 +1,40 @@
 import json
 import os
+import shutil
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 BACKEND_DIR = Path(__file__).resolve().parent
 BASE_DIR = BACKEND_DIR.parent
-SQLITE_DB_PATH = (
+_SOURCE_DB_PATH = (
     BASE_DIR / "skillswap.db"
     if (BASE_DIR / "skillswap.db").is_file()
     else BACKEND_DIR / "skillswap.db"
 )
 DATABASE_URL = os.getenv("DATABASE_URL", "")
+_ACTIVE_SQLITE_PATH: Optional[str] = None
+
+
+def _resolve_writable_sqlite_path() -> str:
+    global _ACTIVE_SQLITE_PATH
+    if _ACTIVE_SQLITE_PATH and os.path.isfile(_ACTIVE_SQLITE_PATH):
+        return _ACTIVE_SQLITE_PATH
+
+    src = str(_SOURCE_DB_PATH)
+    parent_dir = os.path.dirname(src) or "."
+    if os.path.isfile(src) and os.access(src, os.W_OK) and os.access(parent_dir, os.W_OK):
+        _ACTIVE_SQLITE_PATH = src
+        return _ACTIVE_SQLITE_PATH
+
+    tmp_path = "/tmp/skillswap.db"
+    if os.path.isfile(src) and not os.path.isfile(tmp_path):
+        try:
+            shutil.copy2(src, tmp_path)
+        except Exception:
+            pass
+    _ACTIVE_SQLITE_PATH = tmp_path if os.path.isfile(tmp_path) else src
+    return _ACTIVE_SQLITE_PATH
 
 
 def get_db_connection():
@@ -37,8 +60,10 @@ def get_db_connection():
         except Exception:
             pass
 
-    conn = sqlite3.connect(str(SQLITE_DB_PATH))
+    db_path = _resolve_writable_sqlite_path()
+    conn = sqlite3.connect(db_path, timeout=30.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout = 30000;")
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn, "sqlite"
 
@@ -76,6 +101,10 @@ def fetch_user_with_skills(user_id: int, include_private_email: bool = False) ->
         skills = []
         for s in cur.fetchall():
             sd = dict(s)
+            lvl = sd.get("proficiency") or sd.get("level") or "Intermediate"
+            sd["skill"] = sd.get("skill_name")
+            sd["proficiency"] = lvl
+            sd["level"] = lvl
             sd["tags"] = safe_json_loads(sd.get("tags"), [])
             skills.append(sd)
 

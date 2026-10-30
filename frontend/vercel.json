@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://skillswap-fullstack.onrender.com/api/$1"
+      "destination": "https://aiman-skill-swap.onrender.com/api/$1"
     },
     {
       "source": "/(.*)",
