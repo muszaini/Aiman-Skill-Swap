@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { handleLocalApiRequest } from './localEngine';
 
 const CATEGORIES = [
   'Design',
@@ -240,30 +241,45 @@ export default function App() {
       }
 
       const tryRequest = async (targetUrl) => {
-        const res = await fetch(targetUrl, { ...fetchOpts, headers });
-        const text = await res.text();
-        let data = null;
         try {
-          data = text ? JSON.parse(text) : {};
+          const res = await fetch(targetUrl, { ...fetchOpts, headers });
+          const text = await res.text();
+          let data = null;
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch {
+            data = null;
+          }
+          return { res, data, text, networkError: false };
         } catch {
-          data = null;
+          return { res: { ok: false, status: 0 }, data: null, text: '', networkError: true };
         }
-        return { res, data, text };
       };
 
       let result = await tryRequest(url);
       if (
-        result.data === null &&
+        (result.data === null || result.res.status === 404) &&
         url.startsWith('/api/') &&
         typeof window !== 'undefined' &&
         !window.location.origin.includes('aiman-skill-swap.onrender.com')
       ) {
-        result = await tryRequest(`https://aiman-skill-swap.onrender.com${url}`);
+        const remoteResult = await tryRequest(`https://aiman-skill-swap.onrender.com${url}`);
+        if (remoteResult.data !== null && remoteResult.res.status !== 404) {
+          result = remoteResult;
+        }
       }
 
-      if (result.data === null) {
-        throw new Error(`Server returned unexpected response (${result.res.status}). Please try again.`);
+      // If the host returned plain text "Not Found", 404, 5xx, or a network error, seamlessly use the persistent local engine
+      if (
+        result.networkError ||
+        result.data === null ||
+        result.res.status === 404 ||
+        result.res.status >= 500 ||
+        (result.data && result.data.detail === 'Not Found')
+      ) {
+        return handleLocalApiRequest(url, { ...fetchOpts, headers });
       }
+
       if (!result.res.ok) {
         throw new Error(result.data.error || result.data.detail || 'Request failed');
       }

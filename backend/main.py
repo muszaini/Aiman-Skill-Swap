@@ -511,7 +511,7 @@ if FASTAPI_AVAILABLE:
                 headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
             )
         return HTMLResponse(
-            content="""<!DOCTYPE html><html><head><meta charset="utf-8"><title>SkillSwap</title><link rel="stylesheet" href="/assets/index-dFjtyFob.css"></head><body><div id="root"></div><script type="module" src="/assets/index-HZiG4i4O.js"></script></body></html>""",
+            content="""<!DOCTYPE html><html><head><meta charset="utf-8"><title>SkillSwap</title><link rel="stylesheet" href="/assets/index-dFjtyFob.css"></head><body><div id="root"></div><script type="module" src="/assets/index-BheUWr_l.js"></script></body></html>""",
             status_code=200,
             headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
         )
